@@ -6,6 +6,7 @@ export default function App() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [newTaskPriority, setNewTaskPriority] = useState<Priority>('medium');
+  const [filterPriority, setFilterPriority] = useState<Priority | 'all'>('all');
 
   useEffect(() => {
     setTasks(getTasks());
@@ -33,6 +34,10 @@ export default function App() {
     deleteTask(id);
     setTasks(getTasks());
   };
+
+  const filteredTasks = tasks.filter(task =>
+    filterPriority === 'all' || task.priority === filterPriority
+  );
 
   const getPriorityColor = (priority: Priority) => {
     switch (priority) {
@@ -72,11 +77,28 @@ export default function App() {
         </button>
       </form>
 
-      {tasks.length === 0 ? (
-        <p style={{ textAlign: 'center', color: '#777' }}>No tasks yet. Add one above!</p>
+      <div style={{ marginBottom: '20px', display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
+        <label htmlFor="priority-filter" style={{ marginRight: '10px', fontSize: '14px', color: '#555' }}>Filter by Priority:</label>
+        <select
+          id="priority-filter"
+          value={filterPriority}
+          onChange={(e) => setFilterPriority(e.target.value as Priority | 'all')}
+          style={{ padding: '8px', fontSize: '14px', border: '1px solid #ccc', borderRadius: '4px', outline: 'none' }}
+        >
+          <option value="all">All Priorities</option>
+          <option value="low">Low Priority</option>
+          <option value="medium">Medium Priority</option>
+          <option value="high">High Priority</option>
+        </select>
+      </div>
+
+      {filteredTasks.length === 0 ? (
+        <p style={{ textAlign: 'center', color: '#777' }}>
+          {tasks.length === 0 ? 'No tasks yet. Add one above!' : 'No tasks match the selected filter.'}
+        </p>
       ) : (
         <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
-          {tasks.map((task) => (
+          {filteredTasks.map((task) => (
             <li
               key={task.id}
               style={{ display: 'flex', alignItems: 'center', padding: '10px', borderBottom: '1px solid #eee', backgroundColor: task.completed ? '#f9f9f9' : 'white' }}

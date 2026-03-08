@@ -31,7 +31,7 @@ describe('App Component Priority Integration', () => {
     render(<App />);
 
     const input = screen.getByPlaceholderText('Add a new task...');
-    const select = screen.getByRole('combobox');
+    const select = screen.getAllByRole('combobox')[0]; // First select is for adding tasks
     const addButton = screen.getByText('Add');
 
     // Add High priority
@@ -62,5 +62,62 @@ describe('App Component Priority Integration', () => {
     const lastMediumBadge = defaultMediumPriorityBadge[defaultMediumPriorityBadge.length - 1];
     expect(lastMediumBadge).toBeInTheDocument();
     expect(lastMediumBadge.style.color).toBe('orange');
+  });
+
+  it('filters tasks by priority', async () => {
+    render(<App />);
+
+    const input = screen.getByPlaceholderText('Add a new task...');
+    const select = screen.getAllByRole('combobox')[0]; // First select is for adding tasks
+    const addButton = screen.getByText('Add');
+
+    // Add High priority task
+    fireEvent.change(input, { target: { value: 'High Task' } });
+    fireEvent.change(select, { target: { value: 'high' } });
+    fireEvent.click(addButton);
+
+    // Add Low priority task
+    fireEvent.change(input, { target: { value: 'Low Task' } });
+    fireEvent.change(select, { target: { value: 'low' } });
+    fireEvent.click(addButton);
+
+    // Initial state: both tasks should be visible
+    expect(screen.getByText('High Task')).toBeInTheDocument();
+    expect(screen.getByText('Low Task')).toBeInTheDocument();
+
+    const filterSelect = screen.getByLabelText('Filter by Priority:');
+
+    // Filter by High Priority
+    fireEvent.change(filterSelect, { target: { value: 'high' } });
+    expect(screen.getByText('High Task')).toBeInTheDocument();
+    expect(screen.queryByText('Low Task')).not.toBeInTheDocument();
+
+    // Filter by Low Priority
+    fireEvent.change(filterSelect, { target: { value: 'low' } });
+    expect(screen.queryByText('High Task')).not.toBeInTheDocument();
+    expect(screen.getByText('Low Task')).toBeInTheDocument();
+
+    // Filter by All Priorities
+    fireEvent.change(filterSelect, { target: { value: 'all' } });
+    expect(screen.getByText('High Task')).toBeInTheDocument();
+    expect(screen.getByText('Low Task')).toBeInTheDocument();
+  });
+
+  it('shows message when no tasks match filter', async () => {
+    render(<App />);
+
+    const input = screen.getByPlaceholderText('Add a new task...');
+    const addButton = screen.getByText('Add');
+
+    // Add Medium priority task
+    fireEvent.change(input, { target: { value: 'Medium Task' } });
+    fireEvent.click(addButton);
+
+    const filterSelect = screen.getByLabelText('Filter by Priority:');
+
+    // Filter by High Priority (should be empty)
+    fireEvent.change(filterSelect, { target: { value: 'high' } });
+    expect(screen.queryByText('Medium Task')).not.toBeInTheDocument();
+    expect(screen.getByText('No tasks match the selected filter.')).toBeInTheDocument();
   });
 });
