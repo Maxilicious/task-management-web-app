@@ -1,51 +1,46 @@
 import { useState, useEffect } from 'react';
-
-interface Task {
-  id: string;
-  title: string;
-  completed: boolean;
-}
+import { getTasks, addTask, updateTask, deleteTask } from './api';
+import type { Task, Priority } from './api';
 
 export default function App() {
-  const [tasks, setTasks] = useState<Task[]>(() => {
-    const savedTasks = localStorage.getItem('tasks');
-    if (savedTasks) {
-      try {
-        return JSON.parse(savedTasks);
-      } catch (e) {
-        console.error('Failed to parse tasks from localStorage', e);
-      }
-    }
-    return [];
-  });
+  const [tasks, setTasks] = useState<Task[]>([]);
   const [newTaskTitle, setNewTaskTitle] = useState('');
+  const [newTaskPriority, setNewTaskPriority] = useState<Priority>('medium');
 
   useEffect(() => {
-    localStorage.setItem('tasks', JSON.stringify(tasks));
-  }, [tasks]);
+    setTasks(getTasks());
+  }, []);
 
   const handleAddTask = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newTaskTitle.trim()) return;
 
-    const newTask: Task = {
-      id: crypto.randomUUID(),
-      title: newTaskTitle.trim(),
-      completed: false,
-    };
-
-    setTasks([...tasks, newTask]);
+    addTask(newTaskTitle.trim(), newTaskPriority);
+    setTasks(getTasks());
     setNewTaskTitle('');
+    setNewTaskPriority('medium');
   };
 
   const handleToggleTask = (id: string) => {
-    setTasks(tasks.map(task =>
-      task.id === id ? { ...task, completed: !task.completed } : task
-    ));
+    const task = tasks.find(t => t.id === id);
+    if (task) {
+      updateTask(id, { completed: !task.completed });
+      setTasks(getTasks());
+    }
   };
 
   const handleDeleteTask = (id: string) => {
-    setTasks(tasks.filter(task => task.id !== id));
+    deleteTask(id);
+    setTasks(getTasks());
+  };
+
+  const getPriorityColor = (priority: Priority) => {
+    switch (priority) {
+      case 'low': return 'green';
+      case 'medium': return 'orange';
+      case 'high': return 'red';
+      default: return 'black';
+    }
   };
 
   return (
@@ -60,6 +55,15 @@ export default function App() {
           placeholder="Add a new task..."
           style={{ flex: 1, padding: '10px', fontSize: '16px', border: '1px solid #ccc', borderRadius: '4px 0 0 4px', outline: 'none' }}
         />
+        <select
+          value={newTaskPriority}
+          onChange={(e) => setNewTaskPriority(e.target.value as Priority)}
+          style={{ padding: '10px', fontSize: '16px', border: '1px solid #ccc', borderLeft: 'none', outline: 'none' }}
+        >
+          <option value="low">Low Priority</option>
+          <option value="medium">Medium Priority</option>
+          <option value="high">High Priority</option>
+        </select>
         <button
           type="submit"
           style={{ padding: '10px 20px', fontSize: '16px', backgroundColor: '#007bff', color: 'white', border: 'none', borderRadius: '0 4px 4px 0', cursor: 'pointer' }}
@@ -85,6 +89,9 @@ export default function App() {
               />
               <span style={{ flex: 1, textDecoration: task.completed ? 'line-through' : 'none', color: task.completed ? '#888' : '#000', fontSize: '18px' }}>
                 {task.title}
+                <span style={{ marginLeft: '10px', fontSize: '14px', fontWeight: 'bold', color: getPriorityColor(task.priority) }}>
+                  [{task.priority.toUpperCase()}]
+                </span>
               </span>
               <button
                 onClick={() => handleDeleteTask(task.id)}
