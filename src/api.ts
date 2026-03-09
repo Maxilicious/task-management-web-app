@@ -5,6 +5,16 @@ export interface Task {
   title: string;
   completed: boolean;
   priority: Priority;
+  delegatedBy?: string;
+  assignedTo?: string[];
+  originalRequestLink?: string;
+  delegatedAt?: string;
+  lastUpdatedAt?: string;
+  estimatedCompletionDate?: string;
+  prUrl?: string;
+  prStatus?: string;
+  status?: string;
+  creationDate?: string;
 }
 
 const TASKS_STORAGE_KEY = 'tasks';
@@ -38,6 +48,7 @@ export const addTask = (title: string, priority: string = 'medium'): Task => {
     title,
     completed: false,
     priority: validatedPriority,
+    creationDate: new Date().toISOString(),
   };
 
   const tasks = getTasks();
@@ -53,7 +64,11 @@ export const updateTask = (id: string, updates: Partial<Task>): Task[] => {
 
   const updatedTasks = tasks.map(task => {
     if (task.id === id) {
-      updatedTask = { ...task, ...updates };
+      updatedTask = {
+        ...task,
+        ...updates,
+        lastUpdatedAt: new Date().toISOString()
+      };
 
       // Validate priority if it's being updated
       if (updates.priority !== undefined && !isValidPriority(updates.priority)) {

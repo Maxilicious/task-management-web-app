@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { getTasks, addTask, updateTask, deleteTask } from './api';
 import type { Task, Priority } from './api';
 import { getThemePreference, setThemePreference } from './utils/theme';
+import { exportTasksToCSV } from './utils/csvExport';
 
 export default function App() {
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -154,27 +155,43 @@ export default function App() {
           </button>
         </form>
 
-        <div style={{ marginBottom: '20px', display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
-          <label htmlFor="priority-filter" style={{ marginRight: '10px', fontSize: '14px', color: theme.secondaryText }}>Filter by Priority:</label>
-          <select
-            id="priority-filter"
-            value={filterPriority}
-            onChange={(e) => setFilterPriority(e.target.value as Priority | 'all')}
+        <div style={{ marginBottom: '20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <button
+            onClick={() => exportTasksToCSV(filteredTasks)}
             style={{
-              padding: '8px',
-              fontSize: '14px',
-              backgroundColor: theme.inputBg,
-              color: theme.text,
-              border: `1px solid ${theme.border}`,
+              padding: '8px 12px',
+              backgroundColor: '#28a745',
+              color: 'white',
+              border: 'none',
               borderRadius: '4px',
-              outline: 'none'
+              cursor: 'pointer',
+              fontSize: '14px'
             }}
           >
-            <option value="all">All Priorities</option>
-            <option value="low">Low Priority</option>
-            <option value="medium">Medium Priority</option>
-            <option value="high">High Priority</option>
-          </select>
+            📥 Export to CSV
+          </button>
+          <div style={{ display: 'flex', alignItems: 'center' }}>
+            <label htmlFor="priority-filter" style={{ marginRight: '10px', fontSize: '14px', color: theme.secondaryText }}>Filter by Priority:</label>
+            <select
+              id="priority-filter"
+              value={filterPriority}
+              onChange={(e) => setFilterPriority(e.target.value as Priority | 'all')}
+              style={{
+                padding: '8px',
+                fontSize: '14px',
+                backgroundColor: theme.inputBg,
+                color: theme.text,
+                border: `1px solid ${theme.border}`,
+                borderRadius: '4px',
+                outline: 'none'
+              }}
+            >
+              <option value="all">All Priorities</option>
+              <option value="low">Low Priority</option>
+              <option value="medium">Medium Priority</option>
+              <option value="high">High Priority</option>
+            </select>
+          </div>
         </div>
 
         {filteredTasks.length === 0 ? (
