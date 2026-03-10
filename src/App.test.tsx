@@ -21,10 +21,10 @@ describe('App Component Priority Integration', () => {
     fireEvent.change(input, { target: { value: 'Test Default Priority' } });
     fireEvent.click(addButton);
 
-    // Default priority should be 'medium', color should be orange
+    // Default priority should be 'medium', color should be #8c5d00
     const priorityBadge = await screen.findByText('[MEDIUM]');
     expect(priorityBadge).toBeInTheDocument();
-    expect(priorityBadge.style.color).toBe('orange');
+    expect(priorityBadge).toHaveStyle({ color: 'rgb(140, 93, 0)' });
   });
 
   it('creates tasks with low, medium, and high priorities and sets correct colors', async () => {
@@ -41,7 +41,7 @@ describe('App Component Priority Integration', () => {
 
     const highPriorityBadge = await screen.findByText('[HIGH]');
     expect(highPriorityBadge).toBeInTheDocument();
-    expect(highPriorityBadge.style.color).toBe('red');
+    expect(highPriorityBadge).toHaveStyle({ color: 'rgb(192, 0, 0)' });
 
     // Add Low priority
     fireEvent.change(input, { target: { value: 'Low Task' } });
@@ -50,7 +50,7 @@ describe('App Component Priority Integration', () => {
 
     const lowPriorityBadge = await screen.findByText('[LOW]');
     expect(lowPriorityBadge).toBeInTheDocument();
-    expect(lowPriorityBadge.style.color).toBe('green');
+    expect(lowPriorityBadge).toHaveStyle({ color: 'rgb(0, 102, 0)' });
 
     // Ensure state resets to medium default
     fireEvent.change(input, { target: { value: 'Default Task Again' } });
@@ -61,7 +61,7 @@ describe('App Component Priority Integration', () => {
     // Use the last one added
     const lastMediumBadge = defaultMediumPriorityBadge[defaultMediumPriorityBadge.length - 1];
     expect(lastMediumBadge).toBeInTheDocument();
-    expect(lastMediumBadge.style.color).toBe('orange');
+    expect(lastMediumBadge).toHaveStyle({ color: 'rgb(140, 93, 0)' });
   });
 
   it('filters tasks by priority', async () => {
