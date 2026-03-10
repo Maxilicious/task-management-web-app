@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { getTasks, addTask, updateTask, deleteTask } from './api';
 import type { Task, Priority } from './api';
 import { getThemePreference, setThemePreference } from './utils/theme';
+import { sortTasks, type SortOption } from './utils/sorting';
 import { exportTasksToCSV } from './utils/csvExport';
 
 export default function App() {
@@ -9,6 +10,7 @@ export default function App() {
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [newTaskPriority, setNewTaskPriority] = useState<Priority>('medium');
   const [filterPriority, setFilterPriority] = useState<Priority | 'all'>('all');
+  const [sortBy, setSortBy] = useState<SortOption>('creation-newest');
   const [isDarkMode, setIsDarkMode] = useState<boolean>(getThemePreference());
 
   useEffect(() => {
@@ -44,8 +46,9 @@ export default function App() {
     setThemePreference(newMode);
   };
 
-  const filteredTasks = tasks.filter(task =>
-    filterPriority === 'all' || task.priority === filterPriority
+  const filteredAndSortedTasks = sortTasks(
+    tasks.filter(task => filterPriority === 'all' || task.priority === filterPriority),
+    sortBy
   );
 
   const getPriorityColor = (priority: Priority) => {
@@ -155,9 +158,9 @@ export default function App() {
           </button>
         </form>
 
-        <div style={{ marginBottom: '20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div style={{ marginBottom: '20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px' }}>
           <button
-            onClick={() => exportTasksToCSV(filteredTasks)}
+            onClick={() => exportTasksToCSV(filteredAndSortedTasks)}
             style={{
               padding: '8px 12px',
               backgroundColor: '#28a745',
@@ -170,37 +173,61 @@ export default function App() {
           >
             📥 Export to CSV
           </button>
-          <div style={{ display: 'flex', alignItems: 'center' }}>
-            <label htmlFor="priority-filter" style={{ marginRight: '10px', fontSize: '14px', color: theme.secondaryText }}>Filter by Priority:</label>
-            <select
-              id="priority-filter"
-              value={filterPriority}
-              onChange={(e) => setFilterPriority(e.target.value as Priority | 'all')}
-              style={{
-                padding: '8px',
-                fontSize: '14px',
-                backgroundColor: theme.inputBg,
-                color: theme.text,
-                border: `1px solid ${theme.border}`,
-                borderRadius: '4px',
-                outline: 'none'
-              }}
-            >
-              <option value="all">All Priorities</option>
-              <option value="low">Low Priority</option>
-              <option value="medium">Medium Priority</option>
-              <option value="high">High Priority</option>
-            </select>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '15px', flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', alignItems: 'center' }}>
+              <label htmlFor="priority-filter" style={{ marginRight: '8px', fontSize: '14px', color: theme.secondaryText }}>Filter by Priority:</label>
+              <select
+                id="priority-filter"
+                value={filterPriority}
+                onChange={(e) => setFilterPriority(e.target.value as Priority | 'all')}
+                style={{
+                  padding: '8px',
+                  fontSize: '14px',
+                  backgroundColor: theme.inputBg,
+                  color: theme.text,
+                  border: `1px solid ${theme.border}`,
+                  borderRadius: '4px',
+                  outline: 'none'
+                }}
+              >
+                <option value="all">All Priorities</option>
+                <option value="low">Low Priority</option>
+                <option value="medium">Medium Priority</option>
+                <option value="high">High Priority</option>
+              </select>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center' }}>
+              <label htmlFor="sort-by" style={{ marginRight: '8px', fontSize: '14px', color: theme.secondaryText }}>Sort by:</label>
+              <select
+                id="sort-by"
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value as SortOption)}
+                style={{
+                  padding: '8px',
+                  fontSize: '14px',
+                  backgroundColor: theme.inputBg,
+                  color: theme.text,
+                  border: `1px solid ${theme.border}`,
+                  borderRadius: '4px',
+                  outline: 'none'
+                }}
+              >
+                <option value="creation-newest">Creation Date (Newest First)</option>
+                <option value="creation-oldest">Creation Date (Oldest First)</option>
+                <option value="updated-newest">Last Updated (Recently Updated)</option>
+                <option value="updated-oldest">Last Updated (Least Recently Updated)</option>
+              </select>
+            </div>
           </div>
         </div>
 
-        {filteredTasks.length === 0 ? (
+        {filteredAndSortedTasks.length === 0 ? (
           <p style={{ textAlign: 'center', color: theme.secondaryText }}>
             {tasks.length === 0 ? 'No tasks yet. Add one above!' : 'No tasks match the selected filter.'}
           </p>
         ) : (
           <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
-            {filteredTasks.map((task) => (
+            {filteredAndSortedTasks.map((task) => (
               <li
                 key={task.id}
                 style={{
