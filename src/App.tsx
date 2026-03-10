@@ -15,6 +15,22 @@ export default function App() {
     setTasks(getTasks());
   }, []);
 
+  useEffect(() => {
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'isDarkMode') {
+        setIsDarkMode(e.newValue === 'true');
+      }
+    };
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
+  }, []);
+
+  useEffect(() => {
+    document.body.style.backgroundColor = isDarkMode ? '#1a1a1a' : 'white';
+    document.body.style.margin = '0';
+    document.body.style.transition = 'background-color 0.3s';
+  }, [isDarkMode]);
+
   const handleAddTask = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newTaskTitle.trim()) return;
@@ -50,9 +66,9 @@ export default function App() {
 
   const getPriorityColor = (priority: Priority) => {
     switch (priority) {
-      case 'low': return 'green';
-      case 'medium': return 'orange';
-      case 'high': return 'red';
+      case 'low': return isDarkMode ? '#4caf50' : '#006600';
+      case 'medium': return isDarkMode ? '#ffb74d' : '#8c5d00';
+      case 'high': return isDarkMode ? '#ff5252' : '#c00000';
       default: return isDarkMode ? '#ccc' : 'black';
     }
   };
@@ -69,6 +85,7 @@ export default function App() {
     listItemBorder: isDarkMode ? '#444' : '#eee',
     buttonPrimary: '#007bff',
     buttonDelete: '#dc3545',
+    buttonExport: isDarkMode ? '#34c759' : '#1e7e34',
   };
 
   return (
@@ -160,7 +177,7 @@ export default function App() {
             onClick={() => exportTasksToCSV(filteredTasks)}
             style={{
               padding: '8px 12px',
-              backgroundColor: '#28a745',
+              backgroundColor: theme.buttonExport,
               color: 'white',
               border: 'none',
               borderRadius: '4px',
