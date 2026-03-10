@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { getTasks, addTask, updateTask, deleteTask } from './api';
+import { getTasks, addTask, updateTask, deleteTask, suggestTasks } from './api';
 import type { Task, Priority } from './api';
 import { getThemePreference, setThemePreference } from './utils/theme';
 import { sortTasks, type SortOption } from './utils/sorting';
@@ -12,6 +12,8 @@ export default function App() {
   const [filterPriority, setFilterPriority] = useState<Priority | 'all'>('all');
   const [sortBy, setSortBy] = useState<SortOption>('creation-newest');
   const [isDarkMode, setIsDarkMode] = useState<boolean>(getThemePreference());
+  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
 
   useEffect(() => {
     setTasks(getTasks());
@@ -41,6 +43,21 @@ export default function App() {
     setTasks(getTasks());
     setNewTaskTitle('');
     setNewTaskPriority('medium');
+    setSuggestions([]);
+  };
+
+  const handleSuggestTasks = async () => {
+    if (!newTaskTitle.trim()) return;
+    setIsLoadingSuggestions(true);
+    const newSuggestions = await suggestTasks(newTaskTitle.trim());
+    setSuggestions(newSuggestions);
+    setIsLoadingSuggestions(false);
+  };
+
+  const handleAddSuggestedTask = (suggestion: string) => {
+    addTask(suggestion, 'medium');
+    setTasks(getTasks());
+    setSuggestions(prev => prev.filter(s => s !== suggestion));
   };
 
   const handleToggleTask = (id: string) => {
@@ -174,6 +191,64 @@ export default function App() {
             Add
           </button>
         </form>
+
+        <div style={{ marginBottom: '20px' }}>
+          <button
+            onClick={handleSuggestTasks}
+            disabled={isLoadingSuggestions || !newTaskTitle.trim()}
+            style={{
+              padding: '8px 12px',
+              fontSize: '14px',
+              backgroundColor: isDarkMode ? '#555' : '#e0e0e0',
+              color: theme.text,
+              border: `1px solid ${theme.border}`,
+              borderRadius: '4px',
+              cursor: (isLoadingSuggestions || !newTaskTitle.trim()) ? 'not-allowed' : 'pointer',
+              opacity: (isLoadingSuggestions || !newTaskTitle.trim()) ? 0.6 : 1
+            }}
+          >
+            {isLoadingSuggestions ? '⌛ Loading Suggestions...' : '💡 Suggest Sub-tasks'}
+          </button>
+        </div>
+
+        {suggestions.length > 0 && (
+          <div style={{
+            marginBottom: '20px',
+            padding: '15px',
+            backgroundColor: isDarkMode ? '#383838' : '#f0f7ff',
+            borderRadius: '8px',
+            border: `1px solid ${isDarkMode ? '#555' : '#cce5ff'}`
+          }}>
+            <h3 style={{ margin: '0 0 10px 0', fontSize: '16px', color: theme.text }}>Suggested Next Steps:</h3>
+            <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+              {suggestions.map((suggestion, index) => (
+                <li key={index} style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  padding: '5px 0',
+                  borderBottom: index === suggestions.length - 1 ? 'none' : `1px solid ${theme.listItemBorder}`
+                }}>
+                  <span style={{ fontSize: '14px', color: theme.text }}>{suggestion}</span>
+                  <button
+                    onClick={() => handleAddSuggestedTask(suggestion)}
+                    style={{
+                      padding: '2px 8px',
+                      fontSize: '12px',
+                      backgroundColor: theme.buttonPrimary,
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '4px',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    + Add
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
 
         <div style={{ marginBottom: '20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px' }}>
           <button

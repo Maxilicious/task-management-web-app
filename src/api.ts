@@ -93,3 +93,24 @@ export const deleteTask = (id: string): Task[] => {
   localStorage.setItem(TASKS_STORAGE_KEY, JSON.stringify(updatedTasks));
   return updatedTasks;
 };
+
+export const suggestTasks = async (title: string, description?: string): Promise<string[]> => {
+  try {
+    const response = await fetch('http://localhost:3001/suggest-tasks', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ title, description }),
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to fetch suggestions');
+    }
+
+    return await response.json();
+  } catch (e) {
+    console.error('Error fetching task suggestions', e);
+    return [];
+  }
+};
