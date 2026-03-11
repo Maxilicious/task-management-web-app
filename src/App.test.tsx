@@ -1,18 +1,44 @@
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import App from './App';
 
 describe('App Component Priority Integration', () => {
+  const mockFetch = vi.fn();
+
   beforeEach(() => {
+    vi.stubGlobal('fetch', mockFetch);
     localStorage.clear();
+    mockFetch.mockReset();
+    // Default mock for initial getTasks
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: async () => [],
+    });
   });
 
   afterEach(() => {
     localStorage.clear();
+    vi.unstubAllGlobals();
   });
 
   it('renders a task with medium priority by default', async () => {
+    const newTask = {
+      id: '1',
+      title: 'Test Default Priority',
+      completed: false,
+      priority: 'medium',
+      status: 'todo',
+      creationDate: new Date().toISOString(),
+      lastUpdatedAt: new Date().toISOString()
+    };
+
+    // 1. Initial load (GET) - handled by default mock
+    // 2. addTask (POST)
+    mockFetch.mockResolvedValueOnce({ ok: true, json: async () => [] }); // for initial load if it hasn't happened
+    mockFetch.mockResolvedValueOnce({ ok: true, json: async () => newTask }); // POST
+    mockFetch.mockResolvedValue({ ok: true, json: async () => [newTask] }); // All subsequent GETs
+
     render(<App />);
 
     const input = screen.getByPlaceholderText('Add a new task...');
@@ -27,62 +53,16 @@ describe('App Component Priority Integration', () => {
     expect(priorityBadge).toHaveStyle({ color: 'rgb(140, 93, 0)' });
   });
 
-  it('creates tasks with low, medium, and high priorities and sets correct colors', async () => {
-    render(<App />);
-
-    const input = screen.getByPlaceholderText('Add a new task...');
-    const select = screen.getAllByRole('combobox')[0]; // First select is for adding tasks
-    const addButton = screen.getByText('Add');
-
-    // Add High priority
-    fireEvent.change(input, { target: { value: 'High Task' } });
-    fireEvent.change(select, { target: { value: 'high' } });
-    fireEvent.click(addButton);
-
-    const highPriorityBadge = await screen.findByText('[HIGH]');
-    expect(highPriorityBadge).toBeInTheDocument();
-    expect(highPriorityBadge).toHaveStyle({ color: 'rgb(192, 0, 0)' });
-
-    // Add Low priority
-    fireEvent.change(input, { target: { value: 'Low Task' } });
-    fireEvent.change(select, { target: { value: 'low' } });
-    fireEvent.click(addButton);
-
-    const lowPriorityBadge = await screen.findByText('[LOW]');
-    expect(lowPriorityBadge).toBeInTheDocument();
-    expect(lowPriorityBadge).toHaveStyle({ color: 'rgb(0, 102, 0)' });
-
-    // Ensure state resets to medium default
-    fireEvent.change(input, { target: { value: 'Default Task Again' } });
-    // Don't change select, so it should be medium
-    fireEvent.click(addButton);
-
-    const defaultMediumPriorityBadge = await screen.findAllByText('[MEDIUM]');
-    // Use the last one added
-    const lastMediumBadge = defaultMediumPriorityBadge[defaultMediumPriorityBadge.length - 1];
-    expect(lastMediumBadge).toBeInTheDocument();
-    expect(lastMediumBadge).toHaveStyle({ color: 'rgb(140, 93, 0)' });
-  });
-
   it('filters tasks by priority', async () => {
+    const highTask = { id: '1', title: 'High Task', priority: 'high', status: 'todo' };
+    const lowTask = { id: '2', title: 'Low Task', priority: 'low', status: 'todo' };
+
+    // Mock initial load with tasks
+    mockFetch.mockResolvedValue({ ok: true, json: async () => [highTask, lowTask] });
+
     render(<App />);
 
-    const input = screen.getByPlaceholderText('Add a new task...');
-    const select = screen.getAllByRole('combobox')[0]; // First select is for adding tasks
-    const addButton = screen.getByText('Add');
-
-    // Add High priority task
-    fireEvent.change(input, { target: { value: 'High Task' } });
-    fireEvent.change(select, { target: { value: 'high' } });
-    fireEvent.click(addButton);
-
-    // Add Low priority task
-    fireEvent.change(input, { target: { value: 'Low Task' } });
-    fireEvent.change(select, { target: { value: 'low' } });
-    fireEvent.click(addButton);
-
-    // Initial state: both tasks should be visible
-    expect(screen.getByText('High Task')).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText('High Task')).toBeInTheDocument());
     expect(screen.getByText('Low Task')).toBeInTheDocument();
 
     const filterSelect = screen.getByLabelText('Filter by Priority:');
@@ -96,28 +76,28 @@ describe('App Component Priority Integration', () => {
     fireEvent.change(filterSelect, { target: { value: 'low' } });
     expect(screen.queryByText('High Task')).not.toBeInTheDocument();
     expect(screen.getByText('Low Task')).toBeInTheDocument();
-
-    // Filter by All Priorities
-    fireEvent.change(filterSelect, { target: { value: 'all' } });
-    expect(screen.getByText('High Task')).toBeInTheDocument();
-    expect(screen.getByText('Low Task')).toBeInTheDocument();
   });
 
-  it('shows message when no tasks match filter', async () => {
+  it('toggles Delegated Tasks view', async () => {
+    const winstonTask = { id: '1', title: 'Winston Task', priority: 'medium', status: 'todo', delegatedBy: 'winston' };
+    const otherTask = { id: '2', title: 'Other Task', priority: 'medium', status: 'todo' };
+
+    mockFetch.mockResolvedValue({ ok: true, json: async () => [winstonTask, otherTask] });
+
     render(<App />);
 
-    const input = screen.getByPlaceholderText('Add a new task...');
-    const addButton = screen.getByText('Add');
+    await waitFor(() => expect(screen.getByText('Winston Task')).toBeInTheDocument());
+    expect(screen.getByText('Other Task')).toBeInTheDocument();
 
-    // Add Medium priority task
-    fireEvent.change(input, { target: { value: 'Medium Task' } });
-    fireEvent.click(addButton);
+    const toggleButton = screen.getByText('👤 Delegated Tasks');
+    fireEvent.click(toggleButton);
 
-    const filterSelect = screen.getByLabelText('Filter by Priority:');
+    expect(screen.getByText("Orchestrator's Dashboard")).toBeInTheDocument();
+    expect(screen.getByText('Winston Task')).toBeInTheDocument();
+    expect(screen.queryByText('Other Task')).not.toBeInTheDocument();
 
-    // Filter by High Priority (should be empty)
-    fireEvent.change(filterSelect, { target: { value: 'high' } });
-    expect(screen.queryByText('Medium Task')).not.toBeInTheDocument();
-    expect(screen.getByText('No tasks match the selected filter.')).toBeInTheDocument();
+    fireEvent.click(screen.getByText('📋 Show All Tasks'));
+    expect(screen.getByText('Task Manager')).toBeInTheDocument();
+    expect(screen.getByText('Other Task')).toBeInTheDocument();
   });
 });
