@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { getTasks, addTask, updateTask, deleteTask, suggestTasks } from './api';
-import type { Task, Priority } from './api';
+import type { Task, Priority, TaskStatus } from './api';
 import { getThemePreference, setThemePreference } from './utils/theme';
 import { sortTasks, type SortOption } from './utils/sorting';
 import { exportTasksToCSV } from './utils/csvExport';
@@ -14,9 +14,14 @@ export default function App() {
   const [isDarkMode, setIsDarkMode] = useState<boolean>(getThemePreference());
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
+  const [showDelegatedTasksOnly, setShowDelegatedTasksOnly] = useState(false);
 
   useEffect(() => {
-    setTasks(getTasks());
+    const fetchTasks = async () => {
+      const fetchedTasks = await getTasks();
+      setTasks(fetchedTasks);
+    };
+    fetchTasks();
   }, []);
 
   useEffect(() => {
@@ -35,12 +40,13 @@ export default function App() {
     document.body.style.transition = 'background-color 0.3s';
   }, [isDarkMode]);
 
-  const handleAddTask = (e: React.FormEvent) => {
+  const handleAddTask = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newTaskTitle.trim()) return;
 
-    addTask(newTaskTitle.trim(), newTaskPriority);
-    setTasks(getTasks());
+    await addTask(newTaskTitle.trim(), newTaskPriority);
+    const updatedTasks = await getTasks();
+    setTasks(updatedTasks);
     setNewTaskTitle('');
     setNewTaskPriority('medium');
     setSuggestions([]);
@@ -54,23 +60,29 @@ export default function App() {
     setIsLoadingSuggestions(false);
   };
 
-  const handleAddSuggestedTask = (suggestion: string) => {
-    addTask(suggestion, 'medium');
-    setTasks(getTasks());
+  const handleAddSuggestedTask = async (suggestion: string) => {
+    await addTask(suggestion, 'medium');
+    const updatedTasks = await getTasks();
+    setTasks(updatedTasks);
     setSuggestions(prev => prev.filter(s => s !== suggestion));
   };
 
-  const handleToggleTask = (id: string) => {
+  const handleToggleTask = async (id: string) => {
     const task = tasks.find(t => t.id === id);
     if (task) {
-      updateTask(id, { completed: !task.completed });
-      setTasks(getTasks());
+      const updatedTasks = await updateTask(id, { completed: !task.completed });
+      setTasks(updatedTasks);
     }
   };
 
-  const handleDeleteTask = (id: string) => {
-    deleteTask(id);
-    setTasks(getTasks());
+  const handleDeleteTask = async (id: string) => {
+    const updatedTasks = await deleteTask(id);
+    setTasks(updatedTasks);
+  };
+
+  const handleStatusChange = async (id: string, status: TaskStatus) => {
+    const updatedTasks = await updateTask(id, { status });
+    setTasks(updatedTasks);
   };
 
   const toggleTheme = () => {
@@ -80,7 +92,11 @@ export default function App() {
   };
 
   const filteredAndSortedTasks = sortTasks(
-    tasks.filter(task => filterPriority === 'all' || task.priority === filterPriority),
+    tasks.filter(task => {
+      const matchesPriority = filterPriority === 'all' || task.priority === filterPriority;
+      const matchesDelegation = !showDelegatedTasksOnly || task.delegatedBy === 'winston';
+      return matchesPriority && matchesDelegation;
+    }),
     sortBy
   );
 
@@ -123,7 +139,7 @@ export default function App() {
         transition: 'all 0.3s'
       }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-          <h1 style={{ margin: 0, color: theme.text }}>Task Manager</h1>
+          <h1 style={{ margin: 0, color: theme.text }}>{showDelegatedTasksOnly ? "Orchestrator's Dashboard" : 'Task Manager'}</h1>
           <button
             onClick={toggleTheme}
             style={{
@@ -251,8 +267,23 @@ export default function App() {
         )}
 
         <div style={{ marginBottom: '20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px' }}>
-          <button
-            onClick={() => exportTasksToCSV(filteredAndSortedTasks)}
+          <div style={{ display: 'flex', gap: '10px' }}>
+            <button
+              onClick={() => setShowDelegatedTasksOnly(!showDelegatedTasksOnly)}
+              style={{
+                padding: '8px 12px',
+                backgroundColor: showDelegatedTasksOnly ? theme.buttonPrimary : (isDarkMode ? '#444' : '#eee'),
+                color: showDelegatedTasksOnly ? 'white' : theme.text,
+                border: `1px solid ${theme.border}`,
+                borderRadius: '4px',
+                cursor: 'pointer',
+                fontSize: '14px'
+              }}
+            >
+              {showDelegatedTasksOnly ? '📋 Show All Tasks' : '👤 Delegated Tasks'}
+            </button>
+            <button
+              onClick={() => exportTasksToCSV(filteredAndSortedTasks)}
             style={{
               padding: '8px 12px',
               backgroundColor: theme.buttonExport,
@@ -265,6 +296,7 @@ export default function App() {
           >
             📥 Export to CSV
           </button>
+          </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '15px', flexWrap: 'wrap' }}>
             <div style={{ display: 'flex', alignItems: 'center' }}>
               <label htmlFor="priority-filter" style={{ marginRight: '8px', fontSize: '14px', color: theme.secondaryText }}>Filter by Priority:</label>
@@ -337,32 +369,75 @@ export default function App() {
                   onChange={() => handleToggleTask(task.id)}
                   style={{ marginRight: '15px', cursor: 'pointer', transform: 'scale(1.2)' }}
                 />
-                <span style={{
-                  flex: 1,
-                  textDecoration: task.completed ? 'line-through' : 'none',
-                  color: task.completed ? (isDarkMode ? '#666' : '#888') : theme.text,
-                  fontSize: '18px'
-                }}>
-                  {task.title}
-                  <span style={{ marginLeft: '10px', fontSize: '14px', fontWeight: 'bold', color: getPriorityColor(task.priority) }}>
-                    [{task.priority.toUpperCase()}]
-                  </span>
-                </span>
-                <button
-                  onClick={() => handleDeleteTask(task.id)}
-                  style={{
-                    marginLeft: '10px',
-                    padding: '5px 10px',
-                    backgroundColor: theme.buttonDelete,
-                    color: 'white',
-                    border: 'none',
-                    borderRadius: '4px',
-                    cursor: 'pointer',
-                    fontSize: '14px'
-                  }}
-                >
-                  Delete
-                </button>
+                <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+                  <div style={{ display: 'flex', alignItems: 'center' }}>
+                    <span style={{
+                      textDecoration: task.completed ? 'line-through' : 'none',
+                      color: task.completed ? (isDarkMode ? '#666' : '#888') : theme.text,
+                      fontSize: '18px'
+                    }}>
+                      {task.title}
+                    </span>
+                    <span style={{ marginLeft: '10px', fontSize: '14px', fontWeight: 'bold', color: getPriorityColor(task.priority) }}>
+                      [{task.priority.toUpperCase()}]
+                    </span>
+                  </div>
+
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', marginTop: '5px', fontSize: '12px', color: theme.secondaryText }}>
+                    {task.assignedTo && task.assignedTo.length > 0 && (
+                      <span>👤 Assigned to: {task.assignedTo.join(', ')}</span>
+                    )}
+                    {task.delegatedBy && (
+                      <span>Delegated by: {task.delegatedBy}</span>
+                    )}
+                    {task.prUrl && (
+                      <span>
+                        PR: <a href={task.prUrl} target="_blank" rel="noopener noreferrer" style={{ color: theme.buttonPrimary }}>{task.prStatus || 'Link'}</a>
+                      </span>
+                    )}
+                  </div>
+
+                  <div style={{ marginTop: '5px', fontSize: '11px', color: theme.secondaryText, opacity: 0.8 }}>
+                    <span>Created: {task.creationDate ? new Date(task.creationDate).toLocaleString() : 'N/A'}</span>
+                    <span style={{ marginLeft: '10px' }}>Updated: {task.lastUpdatedAt ? new Date(task.lastUpdatedAt).toLocaleString() : 'N/A'}</span>
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '5px' }}>
+                  <select
+                    value={task.status || 'todo'}
+                    onChange={(e) => handleStatusChange(task.id, e.target.value as TaskStatus)}
+                    style={{
+                      padding: '4px 8px',
+                      fontSize: '12px',
+                      backgroundColor: theme.inputBg,
+                      color: theme.text,
+                      border: `1px solid ${theme.border}`,
+                      borderRadius: '4px',
+                      outline: 'none'
+                    }}
+                  >
+                    <option value="todo">To Do</option>
+                    <option value="in_progress">In Progress</option>
+                    <option value="awaiting_review">Awaiting Review</option>
+                    <option value="done">Done</option>
+                  </select>
+
+                  <button
+                    onClick={() => handleDeleteTask(task.id)}
+                    style={{
+                      padding: '5px 10px',
+                      backgroundColor: theme.buttonDelete,
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '4px',
+                      cursor: 'pointer',
+                      fontSize: '14px'
+                    }}
+                  >
+                    Delete
+                  </button>
+                </div>
               </li>
             ))}
           </ul>

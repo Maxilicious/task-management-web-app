@@ -22,12 +22,12 @@ const formatDate = (dateString?: string) => {
   try {
     const date = new Date(dateString);
     return date.toLocaleString();
-  } catch (e) {
+  } catch {
     return dateString;
   }
 };
 
-const escapeCSVValue = (value: any) => {
+const escapeCSVValue = (value: unknown) => {
   if (value === null || value === undefined) return '';
   const stringValue = String(value);
   if (stringValue.includes(',') || stringValue.includes('"') || stringValue.includes('\n')) {
