@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { getTasks, addTask, updateTask, deleteTask, suggestTasks } from './api';
 import type { Task, Priority, TaskStatus } from './api';
 import { getThemePreference, setThemePreference } from './utils/theme';
@@ -15,6 +15,91 @@ export default function App() {
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
   const [showDelegatedTasksOnly, setShowDelegatedTasksOnly] = useState(false);
+  const [showHelpModal, setShowHelpModal] = useState(false);
+
+  // Persistent Filter Bar States
+  const [showFilterBar, setShowFilterBar] = useState<boolean>(() => {
+    const saved = localStorage.getItem('showFilterBar');
+    return saved !== null ? JSON.parse(saved) : true;
+  });
+  const [statusFilter, setStatusFilter] = useState<'all' | 'open' | 'done'>(() => {
+    return (localStorage.getItem('statusFilter') as 'all' | 'open' | 'done') || 'all';
+  });
+  const [assigneeFilter, setAssigneeFilter] = useState<'all' | 'me'>(() => {
+    return (localStorage.getItem('assigneeFilter') as 'all' | 'me') || 'all';
+  });
+
+  useEffect(() => {
+    localStorage.setItem('showFilterBar', JSON.stringify(showFilterBar));
+  }, [showFilterBar]);
+
+  useEffect(() => {
+    localStorage.setItem('statusFilter', statusFilter);
+  }, [statusFilter]);
+
+  useEffect(() => {
+    localStorage.setItem('assigneeFilter', assigneeFilter);
+  }, [assigneeFilter]);
+
+  // Search and Selection States
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+  const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
+  const [editingTitle, setEditingTitle] = useState('');
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const addTaskInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement;
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
+        return;
+      }
+
+      switch (e.key.toLowerCase()) {
+        case 'k':
+          e.preventDefault();
+          searchInputRef.current?.focus();
+          break;
+        case 'n':
+          e.preventDefault();
+          addTaskInputRef.current?.focus();
+          break;
+        case 'f':
+          e.preventDefault();
+          setShowFilterBar(prev => !prev);
+          break;
+        case '?':
+          e.preventDefault();
+          setShowHelpModal(prev => !prev);
+          break;
+        case 'd':
+        case 'delete':
+          if (selectedTaskId) {
+            e.preventDefault();
+            const task = tasks.find(t => t.id === selectedTaskId);
+            if (task && window.confirm(`Delete task "${task.title}"?`)) {
+              handleDeleteTask(selectedTaskId);
+              setSelectedTaskId(null);
+            }
+          }
+          break;
+        case 'e':
+          if (selectedTaskId) {
+            e.preventDefault();
+            setEditingTaskId(selectedTaskId);
+            const task = tasks.find(t => t.id === selectedTaskId);
+            if (task) {
+              setEditingTitle(task.title);
+            }
+          }
+          break;
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [selectedTaskId, tasks, showFilterBar]);
 
   useEffect(() => {
     const fetchTasks = async () => {
@@ -85,6 +170,16 @@ export default function App() {
     setTasks(updatedTasks);
   };
 
+  const handleUpdateTaskTitle = async (id: string) => {
+    if (!editingTitle.trim()) {
+      setEditingTaskId(null);
+      return;
+    }
+    const updatedTasks = await updateTask(id, { title: editingTitle.trim() });
+    setTasks(updatedTasks);
+    setEditingTaskId(null);
+  };
+
   const toggleTheme = () => {
     const newMode = !isDarkMode;
     setIsDarkMode(newMode);
@@ -95,7 +190,17 @@ export default function App() {
     tasks.filter(task => {
       const matchesPriority = filterPriority === 'all' || task.priority === filterPriority;
       const matchesDelegation = !showDelegatedTasksOnly || task.delegatedBy === 'winston';
-      return matchesPriority && matchesDelegation;
+      const matchesSearch = task.title.toLowerCase().includes(searchQuery.toLowerCase());
+
+      const matchesStatus = statusFilter === 'all'
+        ? true
+        : (statusFilter === 'open' ? !task.completed : task.completed);
+
+      const matchesAssignee = assigneeFilter === 'all'
+        ? true
+        : (task.assignedTo?.includes('me') || task.assignedTo?.includes('Me'));
+
+      return matchesPriority && matchesDelegation && matchesSearch && matchesStatus && matchesAssignee;
     }),
     sortBy
   );
@@ -126,6 +231,68 @@ export default function App() {
 
   return (
     <div style={{ backgroundColor: theme.bg, minHeight: '100vh', padding: '40px 20px', transition: 'background-color 0.3s' }}>
+      {showHelpModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0,0,0,0.5)',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          zIndex: 1000
+        }} onClick={() => setShowHelpModal(false)}>
+          <div style={{
+            backgroundColor: theme.containerBg,
+            color: theme.text,
+            padding: '30px',
+            borderRadius: '8px',
+            maxWidth: '400px',
+            width: '90%',
+            boxShadow: '0 4px 20px rgba(0,0,0,0.2)'
+          }} onClick={e => e.stopPropagation()}>
+            <h2 style={{ marginTop: 0 }}>Keyboard Shortcuts</h2>
+            <ul style={{ listStyle: 'none', padding: 0 }}>
+              {[
+                { key: 'K', desc: 'Focus search bar' },
+                { key: 'N', desc: 'Add new task' },
+                { key: 'E', desc: 'Edit selected task' },
+                { key: 'D / Del', desc: 'Delete selected task' },
+                { key: 'F', desc: 'Toggle filter bar' },
+                { key: '?', desc: 'Show this help' },
+              ].map(item => (
+                <li key={item.key} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: `1px solid ${theme.border}` }}>
+                  <kbd style={{
+                    backgroundColor: isDarkMode ? '#444' : '#eee',
+                    padding: '2px 6px',
+                    borderRadius: '4px',
+                    border: `1px solid ${theme.border}`,
+                    fontWeight: 'bold'
+                  }}>{item.key}</kbd>
+                  <span>{item.desc}</span>
+                </li>
+              ))}
+            </ul>
+            <button
+              onClick={() => setShowHelpModal(false)}
+              style={{
+                width: '100%',
+                padding: '10px',
+                marginTop: '20px',
+                backgroundColor: theme.buttonPrimary,
+                color: 'white',
+                border: 'none',
+                borderRadius: '4px',
+                cursor: 'pointer'
+              }}
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      )}
       <div style={{
         fontFamily: 'sans-serif',
         maxWidth: '600px',
@@ -156,9 +323,10 @@ export default function App() {
           </button>
         </div>
 
-        <form onSubmit={handleAddTask} style={{ display: 'flex', marginBottom: '20px' }}>
+        <form onSubmit={handleAddTask} style={{ display: 'flex', marginBottom: '10px' }}>
           <input
             type="text"
+            ref={addTaskInputRef}
             value={newTaskTitle}
             onChange={(e) => setNewTaskTitle(e.target.value)}
             placeholder="Add a new task..."
@@ -266,6 +434,80 @@ export default function App() {
           </div>
         )}
 
+        {showFilterBar && (
+          <div style={{
+            display: 'flex',
+            gap: '10px',
+            marginBottom: '15px',
+            padding: '10px',
+            backgroundColor: isDarkMode ? '#333' : '#f8f9fa',
+            borderRadius: '6px',
+            alignItems: 'center',
+            flexWrap: 'wrap'
+          }}>
+            <span style={{ fontSize: '12px', fontWeight: 'bold', color: theme.secondaryText }}>Status:</span>
+            {(['all', 'open', 'done'] as const).map(status => (
+              <button
+                key={status}
+                onClick={() => setStatusFilter(status)}
+                style={{
+                  padding: '4px 10px',
+                  fontSize: '12px',
+                  borderRadius: '16px',
+                  border: `1px solid ${statusFilter === status ? theme.buttonPrimary : theme.border}`,
+                  backgroundColor: statusFilter === status ? theme.buttonPrimary : 'transparent',
+                  color: statusFilter === status ? 'white' : theme.text,
+                  cursor: 'pointer'
+                }}
+              >
+                {status.charAt(0).toUpperCase() + status.slice(1)}
+              </button>
+            ))}
+
+            <div style={{ width: '1px', height: '20px', backgroundColor: theme.border, margin: '0 5px' }} />
+
+            <span style={{ fontSize: '12px', fontWeight: 'bold', color: theme.secondaryText }}>Assignee:</span>
+            {(['all', 'me'] as const).map(assignee => (
+              <button
+                key={assignee}
+                onClick={() => setAssigneeFilter(assignee)}
+                style={{
+                  padding: '4px 10px',
+                  fontSize: '12px',
+                  borderRadius: '16px',
+                  border: `1px solid ${assigneeFilter === assignee ? theme.buttonPrimary : theme.border}`,
+                  backgroundColor: assigneeFilter === assignee ? theme.buttonPrimary : 'transparent',
+                  color: assigneeFilter === assignee ? 'white' : theme.text,
+                  cursor: 'pointer'
+                }}
+              >
+                {assignee.charAt(0).toUpperCase() + assignee.slice(1)}
+              </button>
+            ))}
+          </div>
+        )}
+
+        <div style={{ marginBottom: '20px' }}>
+          <input
+            type="text"
+            ref={searchInputRef}
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search tasks... (K)"
+            style={{
+              width: '100%',
+              padding: '10px',
+              fontSize: '14px',
+              backgroundColor: theme.inputBg,
+              color: theme.text,
+              border: `1px solid ${theme.border}`,
+              borderRadius: '4px',
+              outline: 'none',
+              boxSizing: 'border-box'
+            }}
+          />
+        </div>
+
         <div style={{ marginBottom: '20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px' }}>
           <div style={{ display: 'flex', gap: '10px' }}>
             <button
@@ -354,12 +596,17 @@ export default function App() {
             {filteredAndSortedTasks.map((task) => (
               <li
                 key={task.id}
+                onClick={() => setSelectedTaskId(task.id)}
                 style={{
                   display: 'flex',
                   alignItems: 'center',
                   padding: '10px',
                   borderBottom: `1px solid ${theme.listItemBorder}`,
-                  backgroundColor: task.completed ? theme.listItemCompletedBg : theme.listItemBg,
+                  backgroundColor: task.id === selectedTaskId
+                    ? (isDarkMode ? '#3d3d3d' : '#e3f2fd')
+                    : (task.completed ? theme.listItemCompletedBg : theme.listItemBg),
+                  borderLeft: task.id === selectedTaskId ? `4px solid ${theme.buttonPrimary}` : 'none',
+                  cursor: 'pointer',
                   transition: 'background-color 0.2s'
                 }}
               >
@@ -371,16 +618,42 @@ export default function App() {
                 />
                 <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
                   <div style={{ display: 'flex', alignItems: 'center' }}>
-                    <span style={{
-                      textDecoration: task.completed ? 'line-through' : 'none',
-                      color: task.completed ? (isDarkMode ? '#666' : '#888') : theme.text,
-                      fontSize: '18px'
-                    }}>
-                      {task.title}
-                    </span>
-                    <span style={{ marginLeft: '10px', fontSize: '14px', fontWeight: 'bold', color: getPriorityColor(task.priority) }}>
-                      [{task.priority.toUpperCase()}]
-                    </span>
+                    {editingTaskId === task.id ? (
+                      <input
+                        autoFocus
+                        type="text"
+                        value={editingTitle}
+                        onChange={(e) => setEditingTitle(e.target.value)}
+                        onBlur={() => handleUpdateTaskTitle(task.id)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') handleUpdateTaskTitle(task.id);
+                          if (e.key === 'Escape') setEditingTaskId(null);
+                        }}
+                        style={{
+                          flex: 1,
+                          padding: '5px',
+                          fontSize: '18px',
+                          backgroundColor: theme.inputBg,
+                          color: theme.text,
+                          border: `1px solid ${theme.buttonPrimary}`,
+                          borderRadius: '4px',
+                          outline: 'none'
+                        }}
+                      />
+                    ) : (
+                      <>
+                        <span style={{
+                          textDecoration: task.completed ? 'line-through' : 'none',
+                          color: task.completed ? (isDarkMode ? '#666' : '#888') : theme.text,
+                          fontSize: '18px'
+                        }}>
+                          {task.title}
+                        </span>
+                        <span style={{ marginLeft: '10px', fontSize: '14px', fontWeight: 'bold', color: getPriorityColor(task.priority) }}>
+                          [{task.priority.toUpperCase()}]
+                        </span>
+                      </>
+                    )}
                   </div>
 
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', marginTop: '5px', fontSize: '12px', color: theme.secondaryText }}>
