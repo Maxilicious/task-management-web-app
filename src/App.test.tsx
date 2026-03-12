@@ -65,15 +65,16 @@ describe('App Component Priority Integration', () => {
     await waitFor(() => expect(screen.getByText('High Task')).toBeInTheDocument());
     expect(screen.getByText('Low Task')).toBeInTheDocument();
 
-    const filterSelect = screen.getByLabelText('Filter by Priority:');
+    const highPriorityChip = screen.getByText('High');
+    const lowPriorityChip = screen.getByText('Low');
 
     // Filter by High Priority
-    fireEvent.change(filterSelect, { target: { value: 'high' } });
+    fireEvent.click(highPriorityChip);
     expect(screen.getByText('High Task')).toBeInTheDocument();
     expect(screen.queryByText('Low Task')).not.toBeInTheDocument();
 
     // Filter by Low Priority
-    fireEvent.change(filterSelect, { target: { value: 'low' } });
+    fireEvent.click(lowPriorityChip);
     expect(screen.queryByText('High Task')).not.toBeInTheDocument();
     expect(screen.getByText('Low Task')).toBeInTheDocument();
   });

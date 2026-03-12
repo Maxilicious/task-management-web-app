@@ -9,7 +9,6 @@ export default function App() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [newTaskPriority, setNewTaskPriority] = useState<Priority>('medium');
-  const [filterPriority, setFilterPriority] = useState<Priority | 'all'>('all');
   const [sortBy, setSortBy] = useState<SortOption>('creation-newest');
   const [isDarkMode, setIsDarkMode] = useState<boolean>(getThemePreference());
   const [suggestions, setSuggestions] = useState<string[]>([]);
@@ -22,11 +21,49 @@ export default function App() {
     const saved = localStorage.getItem('showFilterBar');
     return saved !== null ? JSON.parse(saved) : true;
   });
-  const [statusFilter, setStatusFilter] = useState<'all' | 'open' | 'done'>(() => {
-    return (localStorage.getItem('statusFilter') as 'all' | 'open' | 'done') || 'all';
+
+  const [selectedStatusFilter, setSelectedStatusFilter] = useState<TaskStatus | 'all'>(() => {
+    const saved = localStorage.getItem('tm_filter_state');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        return parsed.status || 'all';
+      } catch (e) { return 'all'; }
+    }
+    return 'all';
   });
-  const [assigneeFilter, setAssigneeFilter] = useState<'all' | 'me'>(() => {
-    return (localStorage.getItem('assigneeFilter') as 'all' | 'me') || 'all';
+
+  const [selectedAssigneeFilter, setSelectedAssigneeFilter] = useState<'me' | 'all'>(() => {
+    const saved = localStorage.getItem('tm_filter_state');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        return parsed.assignee || 'all';
+      } catch (e) { return 'all'; }
+    }
+    return 'all';
+  });
+
+  const [selectedPriorityFilter, setSelectedPriorityFilter] = useState<Priority | 'all'>(() => {
+    const saved = localStorage.getItem('tm_filter_state');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        return parsed.priority || 'all';
+      } catch (e) { return 'all'; }
+    }
+    return 'all';
+  });
+
+  const [dueDateRangeFilter, setDueDateRangeFilter] = useState<'all' | 'today' | 'this_week' | 'no_due_date'>(() => {
+    const saved = localStorage.getItem('tm_filter_state');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        return parsed.dueDateRange || 'all';
+      } catch (e) { return 'all'; }
+    }
+    return 'all';
   });
 
   useEffect(() => {
@@ -34,72 +71,33 @@ export default function App() {
   }, [showFilterBar]);
 
   useEffect(() => {
-    localStorage.setItem('statusFilter', statusFilter);
-  }, [statusFilter]);
-
-  useEffect(() => {
-    localStorage.setItem('assigneeFilter', assigneeFilter);
-  }, [assigneeFilter]);
+    const filterState = {
+      status: selectedStatusFilter,
+      assignee: selectedAssigneeFilter,
+      priority: selectedPriorityFilter,
+      dueDateRange: dueDateRangeFilter,
+    };
+    localStorage.setItem('tm_filter_state', JSON.stringify(filterState));
+  }, [selectedStatusFilter, selectedAssigneeFilter, selectedPriorityFilter, dueDateRangeFilter]);
 
   // Search and Selection States
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchQuery, setSearchQuery] = useState(() => localStorage.getItem('tm_search_query') || '');
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState(searchQuery);
+
+  useEffect(() => {
+    localStorage.setItem('tm_search_query', searchQuery);
+    const handler = setTimeout(() => {
+      setDebouncedSearchQuery(searchQuery);
+    }, 300);
+    return () => clearTimeout(handler);
+  }, [searchQuery]);
+
+  const [highlightedIndex, setHighlightedIndex] = useState<number>(-1);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
   const [editingTitle, setEditingTitle] = useState('');
   const searchInputRef = useRef<HTMLInputElement>(null);
   const addTaskInputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      const target = e.target as HTMLElement;
-      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
-        return;
-      }
-
-      switch (e.key.toLowerCase()) {
-        case 'k':
-          e.preventDefault();
-          searchInputRef.current?.focus();
-          break;
-        case 'n':
-          e.preventDefault();
-          addTaskInputRef.current?.focus();
-          break;
-        case 'f':
-          e.preventDefault();
-          setShowFilterBar(prev => !prev);
-          break;
-        case '?':
-          e.preventDefault();
-          setShowHelpModal(prev => !prev);
-          break;
-        case 'd':
-        case 'delete':
-          if (selectedTaskId) {
-            e.preventDefault();
-            const task = tasks.find(t => t.id === selectedTaskId);
-            if (task && window.confirm(`Delete task "${task.title}"?`)) {
-              handleDeleteTask(selectedTaskId);
-              setSelectedTaskId(null);
-            }
-          }
-          break;
-        case 'e':
-          if (selectedTaskId) {
-            e.preventDefault();
-            setEditingTaskId(selectedTaskId);
-            const task = tasks.find(t => t.id === selectedTaskId);
-            if (task) {
-              setEditingTitle(task.title);
-            }
-          }
-          break;
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [selectedTaskId, tasks, showFilterBar]);
 
   useEffect(() => {
     const fetchTasks = async () => {
@@ -186,24 +184,171 @@ export default function App() {
     setThemePreference(newMode);
   };
 
+  const fuzzyMatch = (text: string, query: string) => {
+    if (!query) return true;
+    const lowerText = text.toLowerCase();
+    const lowerQuery = query.toLowerCase();
+    let queryIndex = 0;
+    for (let textIndex = 0; textIndex < lowerText.length && queryIndex < lowerQuery.length; textIndex++) {
+      if (lowerText[textIndex] === lowerQuery[queryIndex]) {
+        queryIndex++;
+      }
+    }
+    return queryIndex === lowerQuery.length;
+  };
+
+  const highlightText = (text: string, query: string) => {
+    if (!query) return <span>{text}</span>;
+    const lowerText = text.toLowerCase();
+    const lowerQuery = query.toLowerCase();
+    const parts: React.ReactNode[] = [];
+    let lastIndex = 0;
+
+    // Simple highlighting for exact substring matches or first match for fuzzy-like feeling
+    // As per requirement: "Highlight the matching terms within the rendered task.title using <mark> tags"
+    const index = lowerText.indexOf(lowerQuery);
+    if (index !== -1) {
+      parts.push(text.substring(0, index));
+      parts.push(<mark key="match" style={{ backgroundColor: '#ffd54f', color: 'black', borderRadius: '2px', padding: '0 2px' }}>{text.substring(index, index + query.length)}</mark>);
+      parts.push(text.substring(index + query.length));
+    } else {
+      return <span>{text}</span>;
+    }
+    return <span>{parts}</span>;
+  };
+
   const filteredAndSortedTasks = sortTasks(
     tasks.filter(task => {
-      const matchesPriority = filterPriority === 'all' || task.priority === filterPriority;
+      const matchesPriority = selectedPriorityFilter === 'all' || task.priority === selectedPriorityFilter;
       const matchesDelegation = !showDelegatedTasksOnly || task.delegatedBy === 'winston';
-      const matchesSearch = task.title.toLowerCase().includes(searchQuery.toLowerCase());
+      const matchesSearch = fuzzyMatch(task.title, debouncedSearchQuery);
 
-      const matchesStatus = statusFilter === 'all'
+      const matchesStatus = selectedStatusFilter === 'all'
         ? true
-        : (statusFilter === 'open' ? !task.completed : task.completed);
+        : task.status === selectedStatusFilter;
 
-      const matchesAssignee = assigneeFilter === 'all'
+      const matchesAssignee = selectedAssigneeFilter === 'all'
         ? true
-        : (task.assignedTo?.includes('me') || task.assignedTo?.includes('Me'));
+        : (task.assignedTo?.some(a => a.toLowerCase() === 'me' || a.toLowerCase() === 'currentUser'));
 
-      return matchesPriority && matchesDelegation && matchesSearch && matchesStatus && matchesAssignee;
+      // Due Date filtering logic
+      let matchesDate = true;
+      if (dueDateRangeFilter !== 'all') {
+        if (dueDateRangeFilter === 'no_due_date') {
+          matchesDate = !task.dueDate;
+        } else if (task.dueDate) {
+          const dueDate = new Date(task.dueDate);
+          const now = new Date();
+          now.setHours(0, 0, 0, 0);
+          const endOfDay = new Date(now);
+          endOfDay.setHours(23, 59, 59, 999);
+
+          if (dueDateRangeFilter === 'today') {
+            matchesDate = dueDate >= now && dueDate <= endOfDay;
+          } else if (dueDateRangeFilter === 'this_week') {
+            const endOfWeek = new Date(now);
+            endOfWeek.setDate(now.getDate() + (7 - now.getDay()));
+            endOfWeek.setHours(23, 59, 59, 999);
+            matchesDate = dueDate >= now && dueDate <= endOfWeek;
+          }
+        } else {
+          matchesDate = false;
+        }
+      }
+
+      return matchesPriority && matchesDelegation && matchesSearch && matchesStatus && matchesAssignee && matchesDate;
     }),
     sortBy
   );
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement;
+      const isInputFocused = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable;
+
+      if (isInputFocused && !e.ctrlKey && !e.metaKey) {
+        if (target.id === 'global-search') {
+          if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            setHighlightedIndex(prev => Math.min(prev + 1, filteredAndSortedTasks.length - 1));
+          } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            setHighlightedIndex(prev => Math.max(prev - 1, 0));
+          } else if (e.key === 'Enter' && highlightedIndex >= 0) {
+            e.preventDefault();
+            const task = filteredAndSortedTasks[highlightedIndex];
+            if (task) {
+              setSelectedTaskId(task.id);
+            }
+          }
+        }
+        return;
+      }
+
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setShowFilterBar(prev => !prev);
+        return;
+      }
+
+      switch (e.key.toLowerCase()) {
+        case '/':
+          if (!isInputFocused) {
+            e.preventDefault();
+            searchInputRef.current?.focus();
+          }
+          break;
+        case 'k':
+          if (!isInputFocused) {
+            e.preventDefault();
+            searchInputRef.current?.focus();
+          }
+          break;
+        case 'n':
+          if (!isInputFocused) {
+            e.preventDefault();
+            addTaskInputRef.current?.focus();
+          }
+          break;
+        case 'f':
+          if (!isInputFocused) {
+            e.preventDefault();
+            setShowFilterBar(prev => !prev);
+          }
+          break;
+        case '?':
+          if (!isInputFocused) {
+            e.preventDefault();
+            setShowHelpModal(prev => !prev);
+          }
+          break;
+        case 'd':
+        case 'delete':
+          if (!isInputFocused && selectedTaskId) {
+            e.preventDefault();
+            const task = tasks.find(t => t.id === selectedTaskId);
+            if (task && window.confirm(`Delete task "${task.title}"?`)) {
+              handleDeleteTask(selectedTaskId);
+              setSelectedTaskId(null);
+            }
+          }
+          break;
+        case 'e':
+          if (!isInputFocused && selectedTaskId) {
+            e.preventDefault();
+            setEditingTaskId(selectedTaskId);
+            const task = tasks.find(t => t.id === selectedTaskId);
+            if (task) {
+              setEditingTitle(task.title);
+            }
+          }
+          break;
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [selectedTaskId, tasks, showFilterBar, filteredAndSortedTasks, highlightedIndex]);
 
   const getPriorityColor = (priority: Priority) => {
     switch (priority) {
@@ -256,12 +401,14 @@ export default function App() {
             <h2 style={{ marginTop: 0 }}>Keyboard Shortcuts</h2>
             <ul style={{ listStyle: 'none', padding: 0 }}>
               {[
-                { key: 'K', desc: 'Focus search bar' },
+                { key: '/', desc: 'Focus search bar' },
+                { key: 'Ctrl+K', desc: 'Toggle filter bar' },
+                { key: '↑/↓', desc: 'Navigate search results' },
+                { key: 'Enter', desc: 'Select task' },
                 { key: 'N', desc: 'Add new task' },
                 { key: 'E', desc: 'Edit selected task' },
                 { key: 'D / Del', desc: 'Delete selected task' },
-                { key: 'F', desc: 'Toggle filter bar' },
-                { key: '?', desc: 'Show this help' },
+                { key: '?', desc: 'Show help' },
               ].map(item => (
                 <li key={item.key} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: `1px solid ${theme.border}` }}>
                   <kbd style={{
@@ -437,63 +584,144 @@ export default function App() {
         {showFilterBar && (
           <div style={{
             display: 'flex',
-            gap: '10px',
+            flexDirection: 'column',
+            gap: '15px',
             marginBottom: '15px',
-            padding: '10px',
+            padding: '15px',
             backgroundColor: isDarkMode ? '#333' : '#f8f9fa',
             borderRadius: '6px',
-            alignItems: 'center',
-            flexWrap: 'wrap'
-          }}>
-            <span style={{ fontSize: '12px', fontWeight: 'bold', color: theme.secondaryText }}>Status:</span>
-            {(['all', 'open', 'done'] as const).map(status => (
-              <button
-                key={status}
-                onClick={() => setStatusFilter(status)}
-                style={{
-                  padding: '4px 10px',
-                  fontSize: '12px',
-                  borderRadius: '16px',
-                  border: `1px solid ${statusFilter === status ? theme.buttonPrimary : theme.border}`,
-                  backgroundColor: statusFilter === status ? theme.buttonPrimary : 'transparent',
-                  color: statusFilter === status ? 'white' : theme.text,
-                  cursor: 'pointer'
-                }}
-              >
-                {status.charAt(0).toUpperCase() + status.slice(1)}
-              </button>
-            ))}
+          }} aria-label="Task Filters">
+            <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
+              <span style={{ fontSize: '12px', fontWeight: 'bold', color: theme.secondaryText, minWidth: '60px' }}>Status:</span>
+              {(['all', 'todo', 'in_progress', 'awaiting_review', 'done'] as const).map(status => (
+                <button
+                  key={status}
+                  onClick={() => setSelectedStatusFilter(status)}
+                  aria-pressed={selectedStatusFilter === status}
+                  aria-controls="task-list"
+                  style={{
+                    padding: '4px 12px',
+                    fontSize: '12px',
+                    borderRadius: '16px',
+                    border: `1px solid ${selectedStatusFilter === status ? theme.buttonPrimary : theme.border}`,
+                    backgroundColor: selectedStatusFilter === status ? theme.buttonPrimary : (isDarkMode ? '#444' : 'white'),
+                    color: selectedStatusFilter === status ? 'white' : theme.text,
+                    cursor: 'pointer',
+                    transition: 'all 0.2s'
+                  }}
+                >
+                  {status.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')}
+                </button>
+              ))}
+            </div>
 
-            <div style={{ width: '1px', height: '20px', backgroundColor: theme.border, margin: '0 5px' }} />
+            <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
+              <span style={{ fontSize: '12px', fontWeight: 'bold', color: theme.secondaryText, minWidth: '60px' }}>Priority:</span>
+              {(['all', 'low', 'medium', 'high'] as const).map(priority => (
+                <button
+                  key={priority}
+                  onClick={() => setSelectedPriorityFilter(priority)}
+                  aria-pressed={selectedPriorityFilter === priority}
+                  aria-controls="task-list"
+                  style={{
+                    padding: '4px 12px',
+                    fontSize: '12px',
+                    borderRadius: '16px',
+                    border: `1px solid ${selectedPriorityFilter === priority ? theme.buttonPrimary : theme.border}`,
+                    backgroundColor: selectedPriorityFilter === priority ? theme.buttonPrimary : (isDarkMode ? '#444' : 'white'),
+                    color: selectedPriorityFilter === priority ? 'white' : theme.text,
+                    cursor: 'pointer',
+                    transition: 'all 0.2s'
+                  }}
+                >
+                  {priority.charAt(0).toUpperCase() + priority.slice(1)}
+                </button>
+              ))}
+            </div>
 
-            <span style={{ fontSize: '12px', fontWeight: 'bold', color: theme.secondaryText }}>Assignee:</span>
-            {(['all', 'me'] as const).map(assignee => (
-              <button
-                key={assignee}
-                onClick={() => setAssigneeFilter(assignee)}
-                style={{
-                  padding: '4px 10px',
-                  fontSize: '12px',
-                  borderRadius: '16px',
-                  border: `1px solid ${assigneeFilter === assignee ? theme.buttonPrimary : theme.border}`,
-                  backgroundColor: assigneeFilter === assignee ? theme.buttonPrimary : 'transparent',
-                  color: assigneeFilter === assignee ? 'white' : theme.text,
-                  cursor: 'pointer'
-                }}
-              >
-                {assignee.charAt(0).toUpperCase() + assignee.slice(1)}
-              </button>
-            ))}
+            <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
+              <span style={{ fontSize: '12px', fontWeight: 'bold', color: theme.secondaryText, minWidth: '60px' }}>Assignee:</span>
+              {(['all', 'me'] as const).map(assignee => (
+                <button
+                  key={assignee}
+                  onClick={() => setSelectedAssigneeFilter(assignee)}
+                  aria-pressed={selectedAssigneeFilter === assignee}
+                  aria-controls="task-list"
+                  style={{
+                    padding: '4px 12px',
+                    fontSize: '12px',
+                    borderRadius: '16px',
+                    border: `1px solid ${selectedAssigneeFilter === assignee ? theme.buttonPrimary : theme.border}`,
+                    backgroundColor: selectedAssigneeFilter === assignee ? theme.buttonPrimary : (isDarkMode ? '#444' : 'white'),
+                    color: selectedAssigneeFilter === assignee ? 'white' : theme.text,
+                    cursor: 'pointer',
+                    transition: 'all 0.2s'
+                  }}
+                >
+                  {assignee === 'me' ? 'Mine' : 'All'}
+                </button>
+              ))}
+            </div>
+
+            <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
+              <span style={{ fontSize: '12px', fontWeight: 'bold', color: theme.secondaryText, minWidth: '60px' }}>Due Date:</span>
+              {(['all', 'today', 'this_week', 'no_due_date'] as const).map(range => (
+                <button
+                  key={range}
+                  onClick={() => setDueDateRangeFilter(range)}
+                  aria-pressed={dueDateRangeFilter === range}
+                  aria-controls="task-list"
+                  style={{
+                    padding: '4px 12px',
+                    fontSize: '12px',
+                    borderRadius: '16px',
+                    border: `1px solid ${dueDateRangeFilter === range ? theme.buttonPrimary : theme.border}`,
+                    backgroundColor: dueDateRangeFilter === range ? theme.buttonPrimary : (isDarkMode ? '#444' : 'white'),
+                    color: dueDateRangeFilter === range ? 'white' : theme.text,
+                    cursor: 'pointer',
+                    transition: 'all 0.2s'
+                  }}
+                >
+                  {range.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')}
+                </button>
+              ))}
+            </div>
+
+            <button
+              onClick={() => {
+                setSearchQuery('');
+                setSelectedStatusFilter('all');
+                setSelectedAssigneeFilter('all');
+                setSelectedPriorityFilter('all');
+                setDueDateRangeFilter('all');
+              }}
+              aria-label="Reset all filters"
+              style={{
+                alignSelf: 'flex-start',
+                padding: '6px 12px',
+                fontSize: '12px',
+                backgroundColor: 'transparent',
+                color: theme.buttonDelete,
+                border: `1px solid ${theme.buttonDelete}`,
+                borderRadius: '4px',
+                cursor: 'pointer',
+                marginTop: '5px'
+              }}
+            >
+              Reset Filters
+            </button>
           </div>
         )}
 
-        <div style={{ marginBottom: '20px' }}>
+        <div style={{ marginBottom: '20px' }} role="search">
           <input
+            id="global-search"
             type="text"
             ref={searchInputRef}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search tasks... (K)"
+            placeholder="Search tasks... (/)"
+            aria-label="Search tasks"
             style={{
               width: '100%',
               padding: '10px',
@@ -541,28 +769,6 @@ export default function App() {
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '15px', flexWrap: 'wrap' }}>
             <div style={{ display: 'flex', alignItems: 'center' }}>
-              <label htmlFor="priority-filter" style={{ marginRight: '8px', fontSize: '14px', color: theme.secondaryText }}>Filter by Priority:</label>
-              <select
-                id="priority-filter"
-                value={filterPriority}
-                onChange={(e) => setFilterPriority(e.target.value as Priority | 'all')}
-                style={{
-                  padding: '8px',
-                  fontSize: '14px',
-                  backgroundColor: theme.inputBg,
-                  color: theme.text,
-                  border: `1px solid ${theme.border}`,
-                  borderRadius: '4px',
-                  outline: 'none'
-                }}
-              >
-                <option value="all">All Priorities</option>
-                <option value="low">Low Priority</option>
-                <option value="medium">Medium Priority</option>
-                <option value="high">High Priority</option>
-              </select>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center' }}>
               <label htmlFor="sort-by" style={{ marginRight: '8px', fontSize: '14px', color: theme.secondaryText }}>Sort by:</label>
               <select
                 id="sort-by"
@@ -592,11 +798,14 @@ export default function App() {
             {tasks.length === 0 ? 'No tasks yet. Add one above!' : 'No tasks match the selected filter.'}
           </p>
         ) : (
-          <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
-            {filteredAndSortedTasks.map((task) => (
+          <ul id="task-list" style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+            {filteredAndSortedTasks.map((task, index) => (
               <li
                 key={task.id}
-                onClick={() => setSelectedTaskId(task.id)}
+                onClick={() => {
+                  setSelectedTaskId(task.id);
+                  setHighlightedIndex(index);
+                }}
                 style={{
                   display: 'flex',
                   alignItems: 'center',
@@ -604,8 +813,8 @@ export default function App() {
                   borderBottom: `1px solid ${theme.listItemBorder}`,
                   backgroundColor: task.id === selectedTaskId
                     ? (isDarkMode ? '#3d3d3d' : '#e3f2fd')
-                    : (task.completed ? theme.listItemCompletedBg : theme.listItemBg),
-                  borderLeft: task.id === selectedTaskId ? `4px solid ${theme.buttonPrimary}` : 'none',
+                    : (index === highlightedIndex ? (isDarkMode ? '#333' : '#f0f0f0') : (task.completed ? theme.listItemCompletedBg : theme.listItemBg)),
+                  borderLeft: task.id === selectedTaskId ? `4px solid ${theme.buttonPrimary}` : (index === highlightedIndex ? `4px solid ${isDarkMode ? '#666' : '#ccc'}` : 'none'),
                   cursor: 'pointer',
                   transition: 'background-color 0.2s'
                 }}
@@ -647,7 +856,7 @@ export default function App() {
                           color: task.completed ? (isDarkMode ? '#666' : '#888') : theme.text,
                           fontSize: '18px'
                         }}>
-                          {task.title}
+                          {highlightText(task.title, searchQuery)}
                         </span>
                         <span style={{ marginLeft: '10px', fontSize: '14px', fontWeight: 'bold', color: getPriorityColor(task.priority) }}>
                           [{task.priority.toUpperCase()}]
