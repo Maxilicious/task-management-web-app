@@ -16,6 +16,7 @@ export interface Task {
   prStatus?: string;
   status?: TaskStatus;
   creationDate?: string;
+  dueDate?: string;
 }
 
 const TASKS_STORAGE_KEY = 'tasks';
