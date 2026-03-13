@@ -163,6 +163,17 @@ export default function App() {
     setTasks(updatedTasks);
   };
 
+  const handleClearCompleted = async () => {
+    if (window.confirm('Are you sure you want to clear all completed tasks? This action cannot be undone.')) {
+      const completedTaskIds = tasks.filter(t => t.completed).map(t => t.id);
+      for (const id of completedTaskIds) {
+        await deleteTask(id);
+      }
+      const updatedTasks = await getTasks();
+      setTasks(updatedTasks);
+    }
+  };
+
   const handleStatusChange = async (id: string, status: TaskStatus) => {
     const updatedTasks = await updateTask(id, { status });
     setTasks(updatedTasks);
@@ -788,6 +799,21 @@ export default function App() {
             }}
           >
             📥 Export to CSV
+          </button>
+          <button
+            onClick={handleClearCompleted}
+            style={{
+              display: tasks.some(task => task.completed) ? 'block' : 'none',
+              padding: '8px 12px',
+              backgroundColor: theme.buttonDelete,
+              color: 'white',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              fontSize: '14px'
+            }}
+          >
+            Clear Completed Tasks
           </button>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '15px', flexWrap: 'wrap' }}>
