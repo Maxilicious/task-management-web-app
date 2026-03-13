@@ -264,7 +264,7 @@ export default function App() {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement;
-      const isInputFocused = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable;
+      const isInputFocused = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT' || target.isContentEditable;
 
       if (isInputFocused && !e.ctrlKey && !e.metaKey) {
         if (target.id === 'global-search') {
@@ -285,10 +285,36 @@ export default function App() {
         return;
       }
 
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
-        e.preventDefault();
-        setShowFilterBar(prev => !prev);
-        return;
+      // Global keyboard shortcuts
+      if (e.ctrlKey || e.metaKey) {
+        // Ctrl+K to toggle the filter bar
+        if (e.key.toLowerCase() === 'k') {
+          e.preventDefault();
+          setShowFilterBar(prev => !prev);
+          return;
+        }
+
+        // Ctrl+N to add a new task (focuses input, deselects current task)
+        if (e.key.toLowerCase() === 'n') {
+          if (!isInputFocused) {
+            e.preventDefault();
+            document.getElementById('new-task-title-input')?.focus();
+            setSelectedTaskId(null);
+          }
+          return;
+        }
+
+        // Ctrl+D to delete the currently selected task
+        if (e.key.toLowerCase() === 'd') {
+          if (!isInputFocused && selectedTaskId) {
+            e.preventDefault();
+            if (window.confirm('Are you sure you want to delete the selected task?')) {
+              handleDeleteTask(selectedTaskId);
+              setSelectedTaskId(null);
+            }
+          }
+          return;
+        }
       }
 
       switch (e.key.toLowerCase()) {
@@ -304,12 +330,6 @@ export default function App() {
             searchInputRef.current?.focus();
           }
           break;
-        case 'n':
-          if (!isInputFocused) {
-            e.preventDefault();
-            addTaskInputRef.current?.focus();
-          }
-          break;
         case 'f':
           if (!isInputFocused) {
             e.preventDefault();
@@ -322,7 +342,6 @@ export default function App() {
             setShowHelpModal(prev => !prev);
           }
           break;
-        case 'd':
         case 'delete':
           if (!isInputFocused && selectedTaskId) {
             e.preventDefault();
@@ -375,7 +394,10 @@ export default function App() {
   };
 
   return (
-    <div style={{ backgroundColor: theme.bg, minHeight: '100vh', padding: '40px 20px', transition: 'background-color 0.3s' }}>
+    <div
+      onClick={() => setSelectedTaskId(null)}
+      style={{ backgroundColor: theme.bg, minHeight: '100vh', padding: '40px 20px', transition: 'background-color 0.3s' }}
+    >
       {showHelpModal && (
         <div style={{
           position: 'fixed',
@@ -405,9 +427,9 @@ export default function App() {
                 { key: 'Ctrl+K', desc: 'Toggle filter bar' },
                 { key: '↑/↓', desc: 'Navigate search results' },
                 { key: 'Enter', desc: 'Select task' },
-                { key: 'N', desc: 'Add new task' },
+                { key: 'Ctrl+N', desc: 'Add new task' },
                 { key: 'E', desc: 'Edit selected task' },
-                { key: 'D / Del', desc: 'Delete selected task' },
+                { key: 'Ctrl+D', desc: 'Delete selected task' },
                 { key: '?', desc: 'Show help' },
               ].map(item => (
                 <li key={item.key} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: `1px solid ${theme.border}` }}>
@@ -472,6 +494,7 @@ export default function App() {
 
         <form onSubmit={handleAddTask} style={{ display: 'flex', marginBottom: '10px' }}>
           <input
+            id="new-task-title-input"
             type="text"
             ref={addTaskInputRef}
             value={newTaskTitle}
@@ -802,7 +825,8 @@ export default function App() {
             {filteredAndSortedTasks.map((task, index) => (
               <li
                 key={task.id}
-                onClick={() => {
+                onClick={(e) => {
+                  e.stopPropagation();
                   setSelectedTaskId(task.id);
                   setHighlightedIndex(index);
                 }}
@@ -811,10 +835,12 @@ export default function App() {
                   alignItems: 'center',
                   padding: '10px',
                   borderBottom: `1px solid ${theme.listItemBorder}`,
+                  // Visual highlight for the selected task
                   backgroundColor: task.id === selectedTaskId
                     ? (isDarkMode ? '#3d3d3d' : '#e3f2fd')
                     : (index === highlightedIndex ? (isDarkMode ? '#333' : '#f0f0f0') : (task.completed ? theme.listItemCompletedBg : theme.listItemBg)),
                   borderLeft: task.id === selectedTaskId ? `4px solid ${theme.buttonPrimary}` : (index === highlightedIndex ? `4px solid ${isDarkMode ? '#666' : '#ccc'}` : 'none'),
+                  boxShadow: task.id === selectedTaskId ? 'inset 0 0 0 1px ' + theme.buttonPrimary : 'none',
                   cursor: 'pointer',
                   transition: 'background-color 0.2s'
                 }}
