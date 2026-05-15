@@ -213,7 +213,6 @@ export default function App() {
     const lowerText = text.toLowerCase();
     const lowerQuery = query.toLowerCase();
     const parts: React.ReactNode[] = [];
-    let lastIndex = 0;
 
     // Simple highlighting for exact substring matches or first match for fuzzy-like feeling
     // As per requirement: "Highlight the matching terms within the rendered task.title using <mark> tags"
@@ -399,7 +398,7 @@ export default function App() {
     listItemBg: isDarkMode ? '#2d2d2d' : 'white',
     listItemCompletedBg: isDarkMode ? '#252525' : '#f9f9f9',
     listItemBorder: isDarkMode ? '#444' : '#eee',
-    buttonPrimary: '#007bff',
+    buttonPrimary: '#28a745',
     buttonDelete: '#dc3545',
     buttonExport: isDarkMode ? '#34c759' : '#1e7e34',
   };
@@ -580,9 +579,9 @@ export default function App() {
           <div style={{
             marginBottom: '20px',
             padding: '15px',
-            backgroundColor: isDarkMode ? '#383838' : '#f0f7ff',
+            backgroundColor: isDarkMode ? '#383838' : '#e8f5e9',
             borderRadius: '8px',
-            border: `1px solid ${isDarkMode ? '#555' : '#cce5ff'}`
+            border: `1px solid ${isDarkMode ? '#555' : '#c8e6c9'}`
           }}>
             <h3 style={{ margin: '0 0 10px 0', fontSize: '16px', color: theme.text }}>Suggested Next Steps:</h3>
             <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
@@ -863,7 +862,7 @@ export default function App() {
                   borderBottom: `1px solid ${theme.listItemBorder}`,
                   // Visual highlight for the selected task
                   backgroundColor: task.id === selectedTaskId
-                    ? (isDarkMode ? '#3d3d3d' : '#e3f2fd')
+                    ? (isDarkMode ? '#3d3d3d' : '#e8f5e9')
                     : (index === highlightedIndex ? (isDarkMode ? '#333' : '#f0f0f0') : (task.completed ? theme.listItemCompletedBg : theme.listItemBg)),
                   borderLeft: task.id === selectedTaskId ? `4px solid ${theme.buttonPrimary}` : (index === highlightedIndex ? `4px solid ${isDarkMode ? '#666' : '#ccc'}` : 'none'),
                   boxShadow: task.id === selectedTaskId ? 'inset 0 0 0 1px ' + theme.buttonPrimary : 'none',
