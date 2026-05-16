@@ -30,17 +30,17 @@ describe('Dark Mode Functionality', () => {
 
     const outerDiv = (await screen.findByText('Task Manager')).closest('div')?.parentElement?.parentElement;
     // toHaveStyle can sometimes be picky about colors, using rgb instead
-    expect(outerDiv).toHaveStyle('background-color: rgb(255, 255, 255)');
+    expect(outerDiv).toHaveStyle('background-color: rgb(230, 242, 255)');
 
     // Click to toggle to Dark Mode
     fireEvent.click(toggleButton);
     expect(screen.getByText(/☀️ Light Mode/i)).toBeInTheDocument();
-    expect(outerDiv).toHaveStyle('background-color: rgb(26, 26, 26)'); // #1a1a1a
+    expect(outerDiv).toHaveStyle('background-color: rgb(0, 26, 51)'); // #001a33
 
     // Click again to toggle back to Light Mode
     fireEvent.click(screen.getByText(/☀️ Light Mode/i));
     expect(screen.getByText(/🌙 Dark Mode/i)).toBeInTheDocument();
-    expect(outerDiv).toHaveStyle('background-color: rgb(255, 255, 255)');
+    expect(outerDiv).toHaveStyle('background-color: rgb(230, 242, 255)');
   });
 
   it('persists dark mode preference in localStorage', async () => {
@@ -63,6 +63,6 @@ describe('Dark Mode Functionality', () => {
 
     expect(screen.getByText(/☀️ Light Mode/i)).toBeInTheDocument();
     const outerDiv = (await screen.findByText('Task Manager')).closest('div')?.parentElement?.parentElement;
-    expect(outerDiv).toHaveStyle('background-color: rgb(26, 26, 26)'); // #1a1a1a
+    expect(outerDiv).toHaveStyle('background-color: rgb(0, 26, 51)'); // #001a33
   });
 });
