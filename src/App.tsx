@@ -118,7 +118,7 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    document.body.style.backgroundColor = isDarkMode ? '#1a1a1a' : 'white';
+    document.body.style.backgroundColor = isDarkMode ? '#001a33' : '#e6f2ff';
     document.body.style.margin = '0';
     document.body.style.transition = 'background-color 0.3s';
   }, [isDarkMode]);
@@ -390,8 +390,8 @@ export default function App() {
   };
 
   const theme = {
-    bg: isDarkMode ? '#1a1a1a' : 'white',
-    containerBg: isDarkMode ? '#2d2d2d' : 'white',
+    bg: isDarkMode ? '#001a33' : '#e6f2ff',
+    containerBg: isDarkMode ? '#002952' : 'white',
     text: isDarkMode ? '#f0f0f0' : '#333',
     secondaryText: isDarkMode ? '#aaa' : '#555',
     border: isDarkMode ? '#444' : '#ccc',
